@@ -2,46 +2,39 @@ from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.contrib.auth.models import User
+from rest_framework import generics
 from .models import BlogPost, BlogComment
-from .serializers import PostSerializer, CommentSerializer
+from .serializers import PostSerializer, CommentSerializer, UserSerializer
+from rest_framework import permissions
+from .permissions import IsOwnerOrReadOnly
 
 
-class BlogPostList(APIView):
-
-    def get(self, request, format=None):
-        post = BlogPost.objects.all()
-        serializer = PostSerializer(post, many=True)
-        return Response(serializer.data)
-
-    def post(self, request, format=None):
-        serializer = PostSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class BlogPostList(generics.ListCreateAPIView):
+    queryset = BlogPost.objects.all()
+    serializer_class = PostSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
-class BlogPostDetail(APIView):
-    def get_objects(self, pk):
-        try:
-            return BlogPost.objects.get(pk=pk)
-        except BlogPost.DoesNotExist:
-            raise Http404
+class BlogPostDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = BlogPost.objects.all()
+    serializer_class = PostSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
 
-    def get(self, request, pk, format=None):
-        post = self.get_objects(pk)
-        serializer = PostSerializer(post)
-        return Response(serializer.data)
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
 
-    def put(self, request, pk, format=None):
-        post = self.get_objects(pk)
-        serializer = PostSerializer(post, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
 
-    def delete(self, request, pk, format=None):
-        post = self.get_objects(pk)
-        post.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+class UserList(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
 
+
+class UserDetail(generics.RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class CommentList(generics.ListAPIView):
+    queryset = BlogComment.objects.all()
+    serializer_class = CommentSerializer
